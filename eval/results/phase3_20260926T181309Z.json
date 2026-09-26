@@ -1,0 +1,483 @@
+{
+  "generated_at": "2026-09-26T18:13:09Z",
+  "note": "Mechanism-validation results only (stubbed generation). Not a pass@1 measurement.",
+  "suite": [
+    {
+      "unit_id": "t1-EXAMPLE-bs-greeks-pde",
+      "category": "derivatives-pricing",
+      "why": "Already studied. Single parquet deliverable; plain pytest invariant checker. Baseline reference point."
+    },
+    {
+      "unit_id": "t1-bollinger-backtest-aapl",
+      "category": "backtesting",
+      "why": "Already studied. Five deliverables across four formats (json/csv/csv/html/json); plain pytest checker."
+    },
+    {
+      "unit_id": "t1-alpha-hedge-strategy",
+      "category": "cross-domain",
+      "why": "Already studied. Nested JSON + a separate 'intermediates' file; the one checker *architecture* genuinely different from plain pytest (generic multi-phase verifier, tolerance-based, ships checks/reference_data/) -- 11/86 units use this pattern."
+    },
+    {
+      "unit_id": "t1-double-sort",
+      "category": "factor-research",
+      "why": "New category. Single flat CSV, nothing else -- the simplest, most different output shape in the suite. Its one input file is stock_chars.pqt (non-'.parquet' extension), surfacing a real gap in agent/summarizer.py's and agent/self_check.py's extension dispatch."
+    },
+    {
+      "unit_id": "t1-cir-bond-pricing",
+      "category": "fixed-income",
+      "why": "New category. Three separate deliverables (json+csv+csv) under explicit 'File 1/File 2/File 3' headings -- a materially different multi-deliverable contract style from t1-bollinger-backtest-aapl's single 'Step 4' section."
+    },
+    {
+      "unit_id": "t1-var-es-estimation",
+      "category": "risk-management",
+      "why": "New category. manifest.json declares zero input files -- the task must synthesize its own data. Three small deliverables scattered across three independent 'Output:' sub-headings under different Steps, rather than one consolidated section."
+    }
+  ],
+  "contract_extraction": [
+    {
+      "unit_id": "t1-EXAMPLE-bs-greeks-pde",
+      "candidate_filenames": [
+        "results.parquet"
+      ],
+      "schema_keys": [
+        "delta",
+        "gamma",
+        "option_id",
+        "price",
+        "theta",
+        "vega"
+      ],
+      "json_example_keys": [],
+      "n_resolved_inputs": 1
+    },
+    {
+      "unit_id": "t1-bollinger-backtest-aapl",
+      "candidate_filenames": [
+        "cumulative_returns.html",
+        "daily_portfolio.csv",
+        "results.json",
+        "trade_analysis.json",
+        "trades.csv"
+      ],
+      "schema_keys": [],
+      "json_example_keys": [
+        "AAPL",
+        "annualized_return",
+        "annualized_volatility",
+        "calmar_ratio",
+        "final_capital",
+        "max_drawdown",
+        "num_trades",
+        "num_trading_days",
+        "sharpe_ratio",
+        "total_pnl",
+        "total_return",
+        "win_rate"
+      ],
+      "n_resolved_inputs": 1
+    },
+    {
+      "unit_id": "t1-alpha-hedge-strategy",
+      "candidate_filenames": [
+        "results.json",
+        "solution.json"
+      ],
+      "schema_keys": [],
+      "json_example_keys": [
+        "annualized_alpha",
+        "annualized_return",
+        "annualized_volatility",
+        "hit_rate",
+        "hml_beta_residual",
+        "information_ratio",
+        "intermediates",
+        "market_beta_residual",
+        "max_drawdown",
+        "n_rebalances",
+        "nan_count",
+        "sharpe_ratio",
+        "smb_beta_residual",
+        "tracking_error_annual"
+      ],
+      "n_resolved_inputs": 4
+    },
+    {
+      "unit_id": "t1-double-sort",
+      "candidate_filenames": [
+        "strategy_returns.csv"
+      ],
+      "schema_keys": [],
+      "json_example_keys": [],
+      "n_resolved_inputs": 1
+    },
+    {
+      "unit_id": "t1-cir-bond-pricing",
+      "candidate_filenames": [
+        "bond_prices.csv",
+        "calibration.json",
+        "forward_rates.csv",
+        "summary.json"
+      ],
+      "schema_keys": [],
+      "json_example_keys": [
+        "feller_condition_satisfied",
+        "feller_ratio",
+        "feller_satisfied",
+        "kappa",
+        "log_likelihood",
+        "max_yield_error",
+        "mean_yield_error",
+        "n_obs",
+        "r_current",
+        "r_max",
+        "r_mean",
+        "r_min",
+        "r_std",
+        "sigma",
+        "theta",
+        "yield_curve_upward_sloping"
+      ],
+      "n_resolved_inputs": 1
+    },
+    {
+      "unit_id": "t1-var-es-estimation",
+      "candidate_filenames": [
+        "comparison.json",
+        "estimates.csv",
+        "summary.json",
+        "true_values.json"
+      ],
+      "schema_keys": [],
+      "json_example_keys": [
+        "alpha_levels",
+        "distributions",
+        "methods",
+        "n_samples",
+        "overall_best_method",
+        "seed"
+      ],
+      "n_resolved_inputs": 0
+    }
+  ],
+  "records": [
+    {
+      "unit_id": "t1-EXAMPLE-bs-greeks-pde",
+      "condition": "A",
+      "output_types": "parquet",
+      "initial_exec": "success",
+      "self_check_findings": "(not run as part of condition A's own pipeline)",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "sign_range_violation",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-EXAMPLE-bs-greeks-pde",
+      "condition": "B",
+      "output_types": "parquet",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:results.parquet=pass; no_nan_inf_empty:results.parquet=pass; required_keys:results.parquet=pass; sign_range:results.parquet=fail; row_count_parity=fail",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "sign_range_violation",
+      "model_calls": 1,
+      "notes": "side_effect_free=True, byte_identical_to_A=True"
+    },
+    {
+      "unit_id": "t1-EXAMPLE-bs-greeks-pde",
+      "condition": "C",
+      "output_types": "parquet",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:results.parquet=pass; no_nan_inf_empty:results.parquet=pass; required_keys:results.parquet=pass; sign_range:results.parquet=pass; row_count_parity=fail",
+      "repair_triggered": true,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "row_count_mismatch",
+      "model_calls": 2,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-bollinger-backtest-aapl",
+      "condition": "A",
+      "output_types": "csv,html,json",
+      "initial_exec": "success",
+      "self_check_findings": "(not run as part of condition A's own pipeline)",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "schema_mismatch",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-bollinger-backtest-aapl",
+      "condition": "B",
+      "output_types": "csv,html,json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:cumulative_returns.html=pass; no_nan_inf_empty:cumulative_returns.html=pass; required_keys:cumulative_returns.html=fail; sign_range:cumulative_returns.html=not_applicable; readable:daily_portfolio.csv=pass; no_nan_inf_empty:daily_portfolio.csv=pass; required_keys:daily_portfolio.csv=pass; sign_range:daily_portfolio.csv=not_applicable; readable:results.json=pass; no_nan_inf_empty:results.json=pass; required_keys:results.json=pass; sign_range:results.json=not_applicable; readable:trade_analysis.json=pass; no_nan_inf_empty:trade_analysis.json=pass; required_keys:trade_analysis.json=pass; sign_range:trade_analysis.json=not_applicable; readable:trades.csv=pass; no_nan_inf_empty:trades.csv=pass; required_keys:trades.csv=pass; sign_range:trades.csv=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "schema_mismatch",
+      "model_calls": 1,
+      "notes": "side_effect_free=True, byte_identical_to_A=True"
+    },
+    {
+      "unit_id": "t1-bollinger-backtest-aapl",
+      "condition": "C",
+      "output_types": "csv,html,json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:cumulative_returns.html=pass; no_nan_inf_empty:cumulative_returns.html=pass; required_keys:cumulative_returns.html=fail; sign_range:cumulative_returns.html=not_applicable; readable:daily_portfolio.csv=pass; no_nan_inf_empty:daily_portfolio.csv=pass; required_keys:daily_portfolio.csv=pass; sign_range:daily_portfolio.csv=not_applicable; readable:results.json=pass; no_nan_inf_empty:results.json=pass; required_keys:results.json=pass; sign_range:results.json=not_applicable; readable:trade_analysis.json=pass; no_nan_inf_empty:trade_analysis.json=pass; required_keys:trade_analysis.json=pass; sign_range:trade_analysis.json=not_applicable; readable:trades.csv=pass; no_nan_inf_empty:trades.csv=pass; required_keys:trades.csv=pass; sign_range:trades.csv=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": true,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "schema_mismatch",
+      "model_calls": 2,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-alpha-hedge-strategy",
+      "condition": "A",
+      "output_types": "json",
+      "initial_exec": "success",
+      "self_check_findings": "(not run as part of condition A's own pipeline)",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-alpha-hedge-strategy",
+      "condition": "B",
+      "output_types": "json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:results.json=pass; no_nan_inf_empty:results.json=pass; required_keys:results.json=pass; sign_range:results.json=not_applicable; readable:solution.json=pass; no_nan_inf_empty:solution.json=pass; required_keys:solution.json=pass; sign_range:solution.json=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": "side_effect_free=True, byte_identical_to_A=True"
+    },
+    {
+      "unit_id": "t1-alpha-hedge-strategy",
+      "condition": "C",
+      "output_types": "json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:results.json=pass; no_nan_inf_empty:results.json=pass; required_keys:results.json=pass; sign_range:results.json=not_applicable; readable:solution.json=pass; no_nan_inf_empty:solution.json=pass; required_keys:solution.json=pass; sign_range:solution.json=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-double-sort",
+      "condition": "A",
+      "output_types": "csv",
+      "initial_exec": "success",
+      "self_check_findings": "(not run as part of condition A's own pipeline)",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-double-sort",
+      "condition": "B",
+      "output_types": "csv",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:strategy_returns.csv=pass; no_nan_inf_empty:strategy_returns.csv=pass; required_keys:strategy_returns.csv=not_applicable; sign_range:strategy_returns.csv=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": "side_effect_free=True, byte_identical_to_A=True"
+    },
+    {
+      "unit_id": "t1-double-sort",
+      "condition": "C",
+      "output_types": "csv",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:strategy_returns.csv=pass; no_nan_inf_empty:strategy_returns.csv=pass; required_keys:strategy_returns.csv=not_applicable; sign_range:strategy_returns.csv=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-cir-bond-pricing",
+      "condition": "A",
+      "output_types": "csv,json",
+      "initial_exec": "success",
+      "self_check_findings": "(not run as part of condition A's own pipeline)",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-cir-bond-pricing",
+      "condition": "B",
+      "output_types": "csv,json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:bond_prices.csv=pass; no_nan_inf_empty:bond_prices.csv=pass; required_keys:bond_prices.csv=pass; sign_range:bond_prices.csv=not_applicable; readable:calibration.json=pass; no_nan_inf_empty:calibration.json=pass; required_keys:calibration.json=pass; sign_range:calibration.json=not_applicable; readable:forward_rates.csv=pass; no_nan_inf_empty:forward_rates.csv=pass; required_keys:forward_rates.csv=pass; sign_range:forward_rates.csv=not_applicable; readable:summary.json=pass; no_nan_inf_empty:summary.json=pass; required_keys:summary.json=pass; sign_range:summary.json=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": "side_effect_free=True, byte_identical_to_A=True"
+    },
+    {
+      "unit_id": "t1-cir-bond-pricing",
+      "condition": "C",
+      "output_types": "csv,json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:bond_prices.csv=pass; no_nan_inf_empty:bond_prices.csv=pass; required_keys:bond_prices.csv=pass; sign_range:bond_prices.csv=not_applicable; readable:calibration.json=pass; no_nan_inf_empty:calibration.json=pass; required_keys:calibration.json=pass; sign_range:calibration.json=not_applicable; readable:forward_rates.csv=pass; no_nan_inf_empty:forward_rates.csv=pass; required_keys:forward_rates.csv=pass; sign_range:forward_rates.csv=not_applicable; readable:summary.json=pass; no_nan_inf_empty:summary.json=pass; required_keys:summary.json=pass; sign_range:summary.json=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-var-es-estimation",
+      "condition": "A",
+      "output_types": "csv,json",
+      "initial_exec": "success",
+      "self_check_findings": "(not run as part of condition A's own pipeline)",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    },
+    {
+      "unit_id": "t1-var-es-estimation",
+      "condition": "B",
+      "output_types": "csv,json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:comparison.json=pass; no_nan_inf_empty:comparison.json=pass; required_keys:comparison.json=pass; sign_range:comparison.json=not_applicable; readable:estimates.csv=pass; no_nan_inf_empty:estimates.csv=pass; required_keys:estimates.csv=pass; sign_range:estimates.csv=not_applicable; readable:summary.json=pass; no_nan_inf_empty:summary.json=pass; required_keys:summary.json=pass; sign_range:summary.json=not_applicable; readable:true_values.json=pass; no_nan_inf_empty:true_values.json=pass; required_keys:true_values.json=pass; sign_range:true_values.json=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": "side_effect_free=True, byte_identical_to_A=True"
+    },
+    {
+      "unit_id": "t1-var-es-estimation",
+      "condition": "C",
+      "output_types": "csv,json",
+      "initial_exec": "success",
+      "self_check_findings": "execution=pass; output_files_exist=pass; readable:comparison.json=pass; no_nan_inf_empty:comparison.json=pass; required_keys:comparison.json=pass; sign_range:comparison.json=not_applicable; readable:estimates.csv=pass; no_nan_inf_empty:estimates.csv=pass; required_keys:estimates.csv=pass; sign_range:estimates.csv=not_applicable; readable:summary.json=pass; no_nan_inf_empty:summary.json=pass; required_keys:summary.json=pass; sign_range:summary.json=not_applicable; readable:true_values.json=pass; no_nan_inf_empty:true_values.json=pass; required_keys:true_values.json=pass; sign_range:true_values.json=not_applicable; row_count_parity=not_applicable",
+      "repair_triggered": false,
+      "final_exec": "success",
+      "checker_reward": 0.0,
+      "checker_ran": true,
+      "failure_category": "checker_wrong_numeric",
+      "model_calls": 1,
+      "notes": ""
+    }
+  ],
+  "diagnostics": {
+    "t1-EXAMPLE-bs-greeks-pde": {
+      "B_self_check_side_effect_free": true,
+      "A_B_byte_identical": true,
+      "C_final_out_dir_listing": [
+        "pytest_report.json",
+        "results.parquet",
+        "reward.json"
+      ]
+    },
+    "t1-bollinger-backtest-aapl": {
+      "B_self_check_side_effect_free": true,
+      "A_B_byte_identical": true,
+      "C_final_out_dir_listing": [
+        "cumulative_returns.html",
+        "daily_portfolio.csv",
+        "pytest_report.json",
+        "results.json",
+        "reward.json",
+        "trade_analysis.json",
+        "trades.csv"
+      ]
+    },
+    "t1-alpha-hedge-strategy": {
+      "B_self_check_side_effect_free": true,
+      "A_B_byte_identical": true,
+      "C_final_out_dir_listing": [
+        "pytest_report.json",
+        "results.json",
+        "reward.json",
+        "solution.json"
+      ]
+    },
+    "t1-double-sort": {
+      "B_self_check_side_effect_free": true,
+      "A_B_byte_identical": true,
+      "C_final_out_dir_listing": [
+        "pytest_report.json",
+        "reward.json",
+        "strategy_returns.csv"
+      ]
+    },
+    "t1-cir-bond-pricing": {
+      "B_self_check_side_effect_free": true,
+      "A_B_byte_identical": true,
+      "C_final_out_dir_listing": [
+        "bond_prices.csv",
+        "calibration.json",
+        "forward_rates.csv",
+        "pytest_report.json",
+        "reward.json",
+        "summary.json"
+      ]
+    },
+    "t1-var-es-estimation": {
+      "B_self_check_side_effect_free": true,
+      "A_B_byte_identical": true,
+      "C_final_out_dir_listing": [
+        "comparison.json",
+        "estimates.csv",
+        "pytest_report.json",
+        "reward.json",
+        "summary.json",
+        "true_values.json"
+      ]
+    }
+  }
+}

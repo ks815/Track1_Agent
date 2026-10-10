@@ -153,3 +153,104 @@ def test_missing_env_vars_fail_clearly(monkeypatch):
 
     with pytest.raises(KeyError):
         ModelClient()
+
+
+def test_default_client_constructs_with_the_installed_httpx(monkeypatch):
+    """Regression: openai 1.40.0 passes `proxies=` to httpx.Client, an argument httpx 0.28 removed,
+    so a bare ModelClient() raised TypeError inside the agent image and `solve` never reached the
+    model. Every other test here injects its own http_client and so bypasses openai's default
+    client construction -- this one deliberately does not. Constructing a client makes no
+    network call."""
+    _set_env(monkeypatch)
+    from agent.model_client import ModelClient
+
+    ModelClient()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        pytest.param(lambda request: httpx.Response(500, json={"error": {"message": "boom"}}), id="http-500"),
+        pytest.param(lambda request: httpx.Response(503, json={"error": {"message": "busy"}}), id="http-503"),
+        pytest.param(lambda request: httpx.Response(429, json={"error": {"message": "slow"}}), id="http-429"),
+        pytest.param(lambda request: (_ for _ in ()).throw(httpx.ConnectError("refused")), id="connection-error"),
+    ],
+)
+def test_a_failed_request_is_sent_exactly_once_not_retried_by_the_sdk(monkeypatch, failure):
+    """The House allowance is 25 ADMITTED requests per unit, and an admitted request is charged
+    even when it fails. openai's default max_retries=2 would silently resend a 5xx/429/connection
+    failure up to twice, so one logical call could cost three requests. ModelClient makes exactly
+    one request per call and surfaces the failure to the caller (solve() decides what to do)."""
+    import openai
+
+    from agent.model_client import ModelClient
+
+    _set_env(monkeypatch)
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return failure(request)
+
+    _install_mock_transport(monkeypatch, handler)
+
+    with pytest.raises(openai.OpenAIError):
+        ModelClient().generate_code([{"role": "user", "content": "hello"}])
+
+    assert len(sent) == 1
+
+
+def test_client_is_constructed_with_sdk_retries_disabled(monkeypatch):
+    import openai  # noqa: F401  (ensures the skip-guard module is importable)
+
+    _set_env(monkeypatch)
+    captured = _install_mock_transport(monkeypatch, lambda request: _chat_completion_response("x"))
+    from agent.model_client import ModelClient
+
+    ModelClient()
+    assert captured["max_retries"] == 0
+
+
+def _capture_request_body(monkeypatch) -> dict:
+    """Run one ModelClient call against a stubbed transport; return the raw JSON body it sent."""
+    from agent.model_client import ModelClient
+
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["raw"] = request.content
+        seen["body"] = json.loads(request.content)
+        return _chat_completion_response("```python\nprint('hi')\n```")
+
+    _install_mock_transport(monkeypatch, handler)
+    _set_env(monkeypatch)
+    ModelClient().generate_code([{"role": "user", "content": "solve the task"}])
+    return seen
+
+
+def test_request_body_disables_thinking_exactly_as_the_house_guide_documents(monkeypatch):
+    """HOUSE-MODEL.md ("Development thinking controls"): the House model thinks by default; to turn it
+    off for a request, the JSON body carries `chat_template_kwargs` at the TOP LEVEL with
+    `enable_thinking: false`. The OpenAI client sends that via extra_body (a nested "extra_body" key
+    would not do it, and omitting it keeps thinking on, which can spend the 4,000-token output cap
+    before any code is emitted)."""
+    seen = _capture_request_body(monkeypatch)
+    body = seen["body"]
+
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert body["chat_template_kwargs"]["enable_thinking"] is False  # a real JSON false, not "false"/0
+    assert "extra_body" not in body  # merged at the top level, not nested
+    assert b'"enable_thinking": false' in seen["raw"] or b'"enable_thinking":false' in seen["raw"]
+
+
+def test_disabling_thinking_changes_nothing_else_in_the_request(monkeypatch):
+    """Only the documented field is added: same model, messages and 4,000-token cap as before, no
+    tools (vendor-side tools must be off), no `n` (multiple alternatives are refused), and none of the
+    untested House pass-through options (`low_effort`, `reasoning_budget`)."""
+    body = _capture_request_body(monkeypatch)["body"]
+
+    assert set(body) == {"model", "max_tokens", "messages", "chat_template_kwargs"}
+    assert body["model"] == "test-model-v1"
+    assert body["max_tokens"] == 4000
+    assert body["messages"] == [{"role": "user", "content": "solve the task"}]
+    assert set(body["chat_template_kwargs"]) == {"enable_thinking"}

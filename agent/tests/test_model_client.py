@@ -254,3 +254,123 @@ def test_disabling_thinking_changes_nothing_else_in_the_request(monkeypatch):
     assert body["max_tokens"] == 4000
     assert body["messages"] == [{"role": "user", "content": "solve the task"}]
     assert set(body["chat_template_kwargs"]) == {"enable_thinking"}
+
+
+# ---------------------------------------------------------------------------------------------
+# Response metadata (finish_reason) and the per-unit request backstop
+# ---------------------------------------------------------------------------------------------
+
+
+def _response(content, finish_reason="stop", completion_tokens=7) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "id": "c",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "test-model-v1",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": finish_reason}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": completion_tokens, "total_tokens": 1 + completion_tokens},
+        },
+    )
+
+
+def test_the_reply_carries_the_routes_finish_reason_and_token_count_and_is_still_a_plain_string(monkeypatch):
+    from agent.model_client import ModelClient, ModelReply
+
+    _install_mock_transport(monkeypatch, lambda request: _response("```python\nx = (1 +", "length", 4000))
+    _set_env(monkeypatch)
+    reply = ModelClient().generate_code([{"role": "user", "content": "x"}])
+
+    assert isinstance(reply, ModelReply) and isinstance(reply, str)
+    assert reply == "```python\nx = (1 +" and reply.startswith("```python")
+    assert reply.finish_reason == "length" and reply.completion_tokens == 4000
+
+
+def test_a_missing_finish_reason_or_usage_is_reported_as_none_not_guessed(monkeypatch):
+    from agent.model_client import ModelClient
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={"id": "c", "object": "chat.completion", "created": 0, "model": "m",
+                  "choices": [{"index": 0, "message": {"role": "assistant", "content": "code"}, "finish_reason": None}]},
+        )
+
+    _install_mock_transport(monkeypatch, handler)
+    _set_env(monkeypatch)
+    reply = ModelClient().generate_code([{"role": "user", "content": "x"}])
+    assert reply == "code" and reply.finish_reason is None and reply.completion_tokens is None
+
+
+def test_empty_content_still_comes_back_as_an_empty_string(monkeypatch):
+    from agent.model_client import ModelClient
+
+    _install_mock_transport(monkeypatch, lambda request: _response(None, "stop"))
+    _set_env(monkeypatch)
+    assert ModelClient().generate_code([{"role": "user", "content": "x"}]) == ""
+
+
+def test_requests_are_counted_including_failed_ones_and_the_house_allowance_is_a_hard_stop(monkeypatch):
+    import openai
+
+    from agent import model_client
+    from agent.model_client import ModelClient
+
+    sent: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(500, json={"error": {"message": "boom"}}) if len(sent) == 1 else _response("ok")
+
+    _install_mock_transport(monkeypatch, handler)
+    _set_env(monkeypatch)
+    client = ModelClient()
+    with pytest.raises(openai.OpenAIError):
+        client.generate_code([{"role": "user", "content": "x"}])
+    assert client.requests_made == 1  # an admitted request is charged even when it fails
+
+    monkeypatch.setattr(model_client, "MAX_REQUESTS_PER_UNIT", 3)
+    client.generate_code([{"role": "user", "content": "x"}])
+    client.generate_code([{"role": "user", "content": "x"}])
+    assert client.requests_made == 3
+    with pytest.raises(RuntimeError, match="allowance"):
+        client.generate_code([{"role": "user", "content": "x"}])
+    assert len(sent) == 3  # the refused call never reached the wire
+
+
+def test_the_allowance_constant_matches_the_documented_house_limit():
+    from agent.model_client import MAX_REQUESTS_PER_UNIT
+
+    assert MAX_REQUESTS_PER_UNIT == 25
+
+
+def test_every_request_of_a_continued_generation_disables_thinking_and_keeps_the_cap(monkeypatch):
+    """Two requests through the real client: the continuation turn carries the model's own partial reply
+    as the assistant message, and is otherwise an ordinary request (thinking off, 4,000 cap, no tools)."""
+    from agent.generation import generate_script
+    from agent.model_client import ModelClient
+
+    bodies: list[dict] = []
+    replies = [
+        _response("```python\nimport json\nx = 1\ny = (2 +", "length", 4000),
+        _response("```python\ny = 2\nprint(json.dumps([x, y]))\n```", "stop", 20),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return replies[len(bodies) - 1]
+
+    _install_mock_transport(monkeypatch, handler)
+    _set_env(monkeypatch)
+    client = ModelClient()
+    result = generate_script(client, [{"role": "user", "content": "solve"}])
+
+    assert len(bodies) == 2 and client.requests_made == 2
+    for body in bodies:
+        assert body["chat_template_kwargs"] == {"enable_thinking": False}
+        assert body["max_tokens"] == 4000
+        assert set(body) == {"model", "max_tokens", "messages", "chat_template_kwargs"}
+    assert [m["role"] for m in bodies[1]["messages"]] == ["user", "assistant", "user"]
+    assert bodies[1]["messages"][1]["content"] == "```python\nimport json\nx = 1\n"  # cut-off line not sent back
+    assert result.code == "import json\nx = 1\ny = 2\nprint(json.dumps([x, y]))\n"

@@ -12,7 +12,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from agent.executor import extract_code, run_generated_code
+from agent.executor import run_generated_code
+from agent.generation import generate_script
 from agent.input_resolver import resolve_inputs
 from agent.model_client import ModelClient
 from agent.prompt import build_messages, build_repair_messages
@@ -72,7 +73,7 @@ def solve(task_dir: str | Path, out_dir: str | Path) -> None:
     # attempted without it, so this is allowed to raise and crash the process.
     bundle = read_task(task_dir)
     resolved_inputs = resolve_inputs(bundle.task_dir, bundle.manifest)
-    summaries = [summarize(r) for r in resolved_inputs]
+    summaries = [summarize(r, bundle.instruction_text) for r in resolved_inputs]
     ceiling_sec = float(bundle.card.get("agent", {}).get("timeout_sec", _DEFAULT_TIMEOUT_SEC))
     deadline = started + ceiling_sec * (1.0 - _RESERVE_FRACTION)
     first_run_cap_sec = (deadline - started) * _FIRST_RUN_FRACTION
@@ -80,7 +81,8 @@ def solve(task_dir: str | Path, out_dir: str | Path) -> None:
     messages = build_messages(bundle.instruction_text, resolved_inputs, summaries, out_dir)
     try:
         client = ModelClient()
-        code = extract_code(client.generate_code(messages))
+        script = generate_script(client, messages, deadline=deadline, now=_now)
+        code = script.code
     except Exception as exc:  # noqa: BLE001 - see below
         # Without the model there is no first attempt, and a placeholder deliverable would be a
         # fabricated answer, so nothing is written. The official Track 1 guidance is that an uncaught
@@ -89,7 +91,7 @@ def solve(task_dir: str | Path, out_dir: str | Path) -> None:
         trace.record("initial_generation_failed", error=f"{type(exc).__name__}: {exc}")
         trace.log_summary()
         return
-    trace.record("initial_generation", code=code)
+    trace.record("initial_generation", code=code, **script.trace_fields())
 
     first_run_timeout = max(1.0, min(first_run_cap_sec, deadline - _now()))
     result = run_generated_code(code, out_dir, timeout_sec=first_run_timeout)
@@ -98,7 +100,7 @@ def solve(task_dir: str | Path, out_dir: str | Path) -> None:
     check = self_check(bundle, resolved_inputs, summaries, out_dir, result)
     trace.record("self_check", passed=check.passed, outcomes=[o.__dict__ for o in check.outcomes])
 
-    repair_reply = None
+    repair_script = None
     if not check.passed:
         # The repair is a bonus attempt, never a risk to what the first attempt already left in
         # out_dir. If it cannot be obtained (the model call raises), or its script crashes, the
@@ -122,11 +124,11 @@ def solve(task_dir: str | Path, out_dir: str | Path) -> None:
                     execution_result=result,
                     self_check_result=check,
                 )
-                repair_reply = client.generate_code(repair_messages)
+                repair_script = generate_script(client, repair_messages, deadline=deadline, now=_now)
             except Exception as exc:  # noqa: BLE001 - any failure here must leave the artifact alone
                 trace.record("repair_generation_failed", error=f"{type(exc).__name__}: {exc}")
 
-    if repair_reply is not None:
+    if repair_script is not None:
         repair_run_timeout = deadline - _now()
         if repair_run_timeout < _MIN_REPAIR_WINDOW_SEC:
             # The repair request itself used up the window: do not start a run the platform would
@@ -137,8 +139,8 @@ def solve(task_dir: str | Path, out_dir: str | Path) -> None:
                 remaining_sec=round(repair_run_timeout, 1),
             )
         else:
-            code = extract_code(repair_reply)
-            trace.record("repair_generation", code=code)
+            code = repair_script.code
+            trace.record("repair_generation", code=code, **repair_script.trace_fields())
 
             first_result, first_check = result, check
             # Only a first attempt that ran to completion is an artifact worth protecting.

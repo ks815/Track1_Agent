@@ -21,6 +21,28 @@ _MAX_RETRIES = 0
 # false` in the JSON body, which the OpenAI client sends via extra_body. The other documented
 # pass-through options (`low_effort`, `reasoning_budget`) are untested by the operator and not used.
 _EXTRA_BODY = {"chat_template_kwargs": {"enable_thinking": False}}
+# The House allowance is 25 admitted requests per unit. The pipeline is designed to use at most 6
+# (one initial generation and one repair, each with at most two continuations); this is the hard
+# backstop so that no bug can ever spend a request the allowance does not have.
+MAX_REQUESTS_PER_UNIT = 25
+
+
+class ModelReply(str):
+    """The reply text, carrying the response metadata the pipeline acts on.
+
+    It IS the text (a str, compares and slices as one), so every consumer that only wants the text is
+    unaffected. `finish_reason` is the House route's own OpenAI-compatible field: "length" means the
+    reply was cut off by the output-token limit; None means the response did not say.
+    """
+
+    finish_reason: str | None
+    completion_tokens: int | None
+
+    def __new__(cls, text: str, finish_reason: str | None = None, completion_tokens: int | None = None):
+        obj = super().__new__(cls, text)
+        obj.finish_reason = finish_reason
+        obj.completion_tokens = completion_tokens
+        return obj
 
 
 class ModelClient:
@@ -36,12 +58,22 @@ class ModelClient:
             base_url=f"{endpoint}/v1", api_key=os.environ["MODEL_TOKEN"], max_retries=_MAX_RETRIES
         )
         self._model = os.environ["MODEL_NAME"]
+        self.requests_made = 0
 
-    def generate_code(self, messages: list[dict[str, str]]) -> str:
+    def generate_code(self, messages: list[dict[str, str]]) -> ModelReply:
+        if self.requests_made >= MAX_REQUESTS_PER_UNIT:
+            raise RuntimeError(f"refusing request {self.requests_made + 1}: the House allowance is {MAX_REQUESTS_PER_UNIT} per unit")
+        self.requests_made += 1  # an admitted request is charged even if it then fails
         response = self._client.chat.completions.create(
             model=self._model,
             max_tokens=_DEFAULT_MAX_TOKENS,
             messages=messages,
             extra_body=_EXTRA_BODY,
         )
-        return response.choices[0].message.content or ""
+        choice = response.choices[0]
+        usage = getattr(response, "usage", None)
+        return ModelReply(
+            choice.message.content or "",
+            finish_reason=getattr(choice, "finish_reason", None),
+            completion_tokens=getattr(usage, "completion_tokens", None),
+        )

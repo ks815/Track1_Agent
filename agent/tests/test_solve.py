@@ -483,3 +483,119 @@ def test_every_request_disables_thinking_including_the_repair(monkeypatch, task_
     assert len(bodies) == 2  # initial + repair
     for body in bodies:
         assert body["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+# ---------------------------------------------------------------------------------------------
+# Truncation-aware generation, end to end through solve()
+# ---------------------------------------------------------------------------------------------
+
+_GOOD_LINES = [
+    "import json",
+    "payload = {'value': 2.0}",
+    "path = '__OUT__/result.json'",
+    "with open(path, 'w') as handle:",
+    "    json.dump(payload, handle)",
+]
+
+
+class _MetaClient:
+    """Plays back (text, finish_reason) replies as ModelReply objects; an Exception entry is raised."""
+
+    def __init__(self, out_dir: Path, replies: list):
+        self._out = str(out_dir)
+        self._replies = list(replies)
+        self.requests: list[list[dict]] = []
+
+    def generate_code(self, messages):
+        from agent.model_client import ModelReply
+
+        self.requests.append([dict(m) for m in messages])
+        step = self._replies.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        text, reason = step
+        return ModelReply(text.replace("__OUT__", self._out), finish_reason=reason)
+
+
+def _good_head(n_lines: int, partial: str = "") -> str:
+    return "```python\n" + "\n".join(_GOOD_LINES[:n_lines]) + "\n" + partial
+
+
+def _good_tail(from_line: int) -> str:
+    return "```python\n" + "\n".join(_GOOD_LINES[from_line:]) + "\n```\n"
+
+
+def _run_meta(monkeypatch, task_dir, tmp_path, replies):
+    from agent import generation
+
+    monkeypatch.setattr(generation, "_MIN_CONTINUATION_WINDOW_SEC", 1.0)  # the synthetic ceiling is 60 s
+    out_dir = tmp_path / "out"
+    client = _MetaClient(out_dir, replies)
+    monkeypatch.setattr(solve_module, "ModelClient", lambda: client)
+    solve_module.solve(task_dir, out_dir)
+    return out_dir, client
+
+
+def test_a_complete_reply_costs_one_request_and_records_its_finish_reason(monkeypatch, task_dir, tmp_path, traces):
+    complete = "```python\n" + "\n".join(_GOOD_LINES) + "\n```\n"
+    out_dir, client = _run_meta(monkeypatch, task_dir, tmp_path, [(complete, "stop")])
+    assert len(client.requests) == 1
+    assert json.loads((out_dir / "result.json").read_text()) == {"value": 2.0}
+    entry = _stage(traces, "initial_generation")
+    assert entry["finish_reason"] == "stop" and "continuations" not in entry
+    assert _stages(traces) == [
+        "initial_generation", "execution", "self_check", "final_execution", "final_self_check",
+    ]
+
+
+def test_a_truncated_reply_is_continued_and_the_assembled_script_runs_without_a_repair(
+    monkeypatch, task_dir, tmp_path, traces
+):
+    out_dir, client = _run_meta(
+        monkeypatch, task_dir, tmp_path,
+        [(_good_head(3, "with open(pa"), "length"), (_good_tail(3), "stop")],
+    )
+    assert len(client.requests) == 2  # initial + one continuation; no repair needed
+    assert json.loads((out_dir / "result.json").read_text()) == {"value": 2.0}
+    entry = _stage(traces, "initial_generation")
+    assert entry["continuations"] == 1 and entry["still_truncated"] is False
+    assert "repair_generation" not in _stages(traces)
+    assert [m["role"] for m in client.requests[1]][-2:] == ["assistant", "user"]
+
+
+def test_a_failed_continuation_falls_back_to_the_existing_single_repair(monkeypatch, task_dir, tmp_path, traces):
+    good = "```python\n" + "\n".join(_GOOD_LINES) + "\n```\n"
+    out_dir, client = _run_meta(
+        monkeypatch, task_dir, tmp_path,
+        [(_good_head(3, "with open(pa"), "length"), ConnectionError("down"), (good, "stop")],
+    )
+    # initial + the failed continuation + the one repair: three requests, never more
+    assert len(client.requests) == 3
+    assert "## Your previous code" in client.requests[2][-1]["content"]
+    assert json.loads((out_dir / "result.json").read_text()) == {"value": 2.0}
+    assert _stage(traces, "initial_generation")["still_truncated"] is True
+
+
+def test_an_endlessly_truncated_model_is_bounded_in_requests(monkeypatch, task_dir, tmp_path, traces):
+    cut = (_good_head(2, "pay"), "length")
+    out_dir, client = _run_meta(monkeypatch, task_dir, tmp_path, [cut] * 12)
+    # generation: 1 + 2 continuations; repair: 1 + 2 continuations
+    assert len(client.requests) == 6
+    assert list(out_dir.iterdir()) == []  # nothing runnable was produced, nothing fabricated
+    assert _stages(traces)[-2:] == ["final_execution", "final_self_check"]
+
+
+def test_without_a_confirmed_length_finish_nothing_is_continued(monkeypatch, task_dir, tmp_path):
+    """An unclosed fence that the route reports as a normal stop is the model's own formatting slip,
+    not truncation: it is extracted and run as-is, with no extra request."""
+    unclosed = "```python\n" + "\n".join(_GOOD_LINES) + "\n"
+    out_dir, client = _run_meta(monkeypatch, task_dir, tmp_path, [(unclosed, "stop")])
+    assert len(client.requests) == 1
+    assert json.loads((out_dir / "result.json").read_text()) == {"value": 2.0}
+
+
+def test_a_malformed_language_tag_no_longer_burns_the_repair(monkeypatch, task_dir, tmp_path):
+    code = "\n".join(_GOOD_LINES)
+    out_dir, client = _run_meta(monkeypatch, task_dir, tmp_path, [(f"```Python\n{code}\n```\n", "stop")])
+    assert len(client.requests) == 1
+    assert json.loads((out_dir / "result.json").read_text()) == {"value": 2.0}
